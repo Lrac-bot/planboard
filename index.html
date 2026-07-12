@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6fed">
+<title>PlanBoard</title>
+<style>
+  :root {
+    --bg:#f4f5f7; --card:#fff; --ink:#1c2333; --muted:#6b7385; --line:#e3e6ec;
+    --accent:#2f6fed; --violet:#6b46c1; --amber:#b7791f; --amber-bg:#fdf3e0;
+    --green:#1f9d55; --red:#d64545;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body { font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; background:var(--bg); color:var(--ink); font-size:15px; padding-bottom:70px; }
+  header { background:var(--accent); color:#fff; padding:14px 16px calc(10px + env(safe-area-inset-top)) 16px; padding-top:calc(14px + env(safe-area-inset-top)); position:sticky; top:0; z-index:10; }
+  header h1 { font-size:17px; font-weight:700; }
+  header .stand { font-size:11.5px; opacity:.85; margin-top:2px; }
+  .datebar { display:flex; align-items:center; justify-content:space-between; background:var(--card); border-bottom:1px solid var(--line); padding:8px 12px; position:sticky; top:0; z-index:9; }
+  .datebar b { font-size:15px; }
+  .datebar button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px 14px; font-size:15px; color:var(--accent); font-weight:600; }
+  main { padding:12px; }
+  .tab { display:none; }
+  .tab.on { display:block; }
+  .summary { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--muted); margin-bottom:10px; }
+
+  /* Tagesansicht wie Teams-Kalender */
+  .dayview { position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .hourrow { display:flex; height:60px; border-top:1px solid #eef0f4; }
+  .hourrow:first-child { border-top:none; }
+  .hourrow .hl { width:52px; flex-shrink:0; font-size:11px; color:var(--muted); text-align:right; padding:4px 8px 0 0; border-right:1px solid #eef0f4; font-variant-numeric:tabular-nums; }
+  .evlayer { position:absolute; top:0; left:52px; right:6px; bottom:0; }
+  .evblock { position:absolute; left:4px; right:0; border-radius:8px; padding:5px 9px; font-size:12.5px; overflow:hidden; border-left:4px solid var(--accent); background:#e8effd; color:#1a3d8f; }
+  .evblock b { display:block; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .evblock .tm { font-size:10.5px; opacity:.8; font-variant-numeric:tabular-nums; }
+  .evblock.k-private { border-left-color:var(--violet); background:#f0eafa; color:#44277e; }
+  .evblock.k-event { border-left-color:var(--amber); background:var(--amber-bg); color:#7a5010; }
+  .evblock.k-break { border-left-color:#9aa1b0; background:#f0f1f4; color:var(--muted); }
+  .evblock.k-done { opacity:.5; text-decoration:line-through; }
+  .nowline { position:absolute; left:0; right:0; height:2px; background:var(--red); z-index:5; }
+  .nowline::before { content:""; position:absolute; left:-4px; top:-3px; width:8px; height:8px; border-radius:50%; background:var(--red); }
+  .unplanned { margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; }
+  .unplanned b { font-size:12.5px; }
+  .unplanned li { margin-left:18px; color:var(--muted); padding:2px 0; }
+
+  /* Gantt */
+  .gwrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; }
+  .gantt { min-width:640px; }
+  .g-axis { display:flex; margin-left:130px; border-bottom:1px solid var(--line); }
+  .g-axis span { font-size:10px; color:var(--muted); flex-shrink:0; border-left:1px solid var(--line); padding:2px 0 4px 3px; }
+  .g-row { display:flex; align-items:center; min-height:30px; border-bottom:1px solid #f1f2f5; }
+  .g-label { width:130px; flex-shrink:0; font-size:11.5px; padding-right:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .g-label.p { font-weight:700; font-size:12px; }
+  .g-track { position:relative; flex:1; height:30px; }
+  .g-bar { position:absolute; top:7px; height:16px; border-radius:4px; background:var(--accent); min-width:5px; }
+  .g-bar.done { background:var(--green); }
+  .g-bar.late { background:var(--red); }
+  .g-bar.pbar { background:#c6d4f5; height:8px; top:11px; }
+  .g-today { position:absolute; top:0; bottom:0; width:2px; background:var(--red); opacity:.5; }
+
+  /* Aufgaben */
+  .tlist { background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  .titem { padding:11px 14px; border-bottom:1px solid #eef0f4; }
+  .titem:last-child { border-bottom:none; }
+  .titem .tt { font-weight:600; font-size:14px; }
+  .titem.done .tt { text-decoration:line-through; color:var(--muted); }
+  .meta { display:flex; gap:5px; flex-wrap:wrap; margin-top:4px; }
+  .badge { font-size:10.5px; padding:2px 7px; border-radius:12px; font-weight:600; background:#eef0f4; color:var(--muted); }
+  .b-q1 { background:#fbe9e9; color:var(--red); }
+  .b-q2 { background:#e8effd; color:var(--accent); }
+  .b-q3 { background:var(--amber-bg); color:var(--amber); }
+  .b-priv { background:#f0eafa; color:var(--violet); }
+  .b-work { background:#e8effd; color:var(--accent); }
+  .b-block { background:#fbe9e9; color:var(--red); }
+
+  /* Bottom-Nav */
+  .bottomnav { position:fixed; bottom:0; left:0; right:0; display:flex; background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); z-index:20; }
+  .bottomnav button { flex:1; border:none; background:none; padding:11px 0 9px; font-size:12.5px; color:var(--muted); font-family:inherit; }
+  .bottomnav button.on { color:var(--accent); font-weight:700; }
+  .bottomnav button span { display:block; font-size:19px; margin-bottom:1px; }
+
+  /* Passwort-Dialog */
+  .lock { position:fixed; inset:0; background:var(--bg); z-index:50; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .lockbox { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px 22px; width:100%; max-width:340px; text-align:center; }
+  .lockbox h2 { font-size:17px; margin-bottom:6px; }
+  .lockbox p { font-size:13px; color:var(--muted); margin-bottom:16px; }
+  .lockbox input { width:100%; padding:11px; border:1px solid var(--line); border-radius:9px; font-size:15px; margin-bottom:10px; text-align:center; }
+  .lockbox button { width:100%; padding:11px; border:none; border-radius:9px; background:var(--accent); color:#fff; font-size:15px; font-weight:600; font-family:inherit; }
+  .err { color:var(--red); font-size:13px; margin-bottom:8px; min-height:16px; }
+  .empty { text-align:center; color:var(--muted); padding:40px 16px; font-size:14px; }
+</style>
+</head>
+<body>
+
+<div class="lock" id="lock">
+  <div class="lockbox">
+    <h2>PlanBoard</h2>
+    <p>Gib dein Passwort ein, um deinen Tagesplan zu entschlüsseln. Die Daten liegen nur verschlüsselt im Netz.</p>
+    <div class="err" id="lockErr"></div>
+    <input type="password" id="pass" placeholder="Passwort" autocomplete="current-password">
+    <button id="unlock">Entsperren</button>
+  </div>
+</div>
+
+<header>
+  <h1>PlanBoard</h1>
+  <div class="stand" id="stand"></div>
+</header>
+
+<div class="datebar" id="datebar">
+  <button id="prevDay">‹</button>
+  <b id="dateLabel"></b>
+  <button id="nextDay">›</button>
+</div>
+
+<main>
+  <section class="tab on" id="tab-day">
+    <div class="summary" id="daySummary" style="display:none"></div>
+    <div class="dayview" id="dayview"></div>
+    <div class="unplanned" id="unplannedBox" style="display:none"></div>
+  </section>
+  <section class="tab" id="tab-gantt">
+    <div class="gwrap"><div class="gantt" id="gantt"></div></div>
+  </section>
+  <section class="tab" id="tab-tasks">
+    <div class="tlist" id="tlist"></div>
+  </section>
+</main>
+
+<nav class="bottomnav">
+  <button data-t="day" class="on"><span>🗓️</span>Tag</button>
+  <button data-t="gantt"><span>📊</span>Gantt</button>
+  <button data-t="tasks"><span>✅</span>Aufgaben</button>
+</nav>
+
+<script>
+"use strict";
+let data = null;
+const localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+let curDate = localISO(new Date());
+
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const esc = s => (s||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const fmtD = iso => new Date(iso+"T00:00:00").toLocaleDateString("de-DE",{weekday:"long",day:"2-digit",month:"2-digit"});
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const quad = t => t.important && t.urgent ? "q1" : t.important ? "q2" : t.urgent ? "q3" : "q4";
+
+/* ---- Entschlüsselung (PBKDF2 + AES-GCM) ---- */
+async function decrypt(payload, pass) {
+  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt:b64(payload.salt), iterations:200000, hash:"SHA-256"},
+    km, {name:"AES-GCM", length:256}, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv:b64(payload.iv)}, key, b64(payload.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+async function boot() {
+  let payload;
+  try {
+    const r = await fetch("data.enc.json", {cache:"no-store"});
+    payload = await r.json();
+  } catch(e) {
+    $("#lockErr").textContent = "Daten nicht erreichbar. Lief die Veröffentlichung schon?";
+    return;
+  }
+  const saved = localStorage.getItem("pb_pass");
+  if (saved) {
+    try { data = await decrypt(payload, saved); unlockUI(); return; } catch(e) { localStorage.removeItem("pb_pass"); }
+  }
+  $("#unlock").onclick = async () => {
+    const p = $("#pass").value;
+    try {
+      data = await decrypt(payload, p);
+      localStorage.setItem("pb_pass", p);
+      unlockUI();
+    } catch(e) { $("#lockErr").textContent = "Falsches Passwort"; }
+  };
+  $("#pass").addEventListener("keydown", e => { if (e.key === "Enter") $("#unlock").click(); });
+}
+
+function unlockUI() {
+  $("#lock").style.display = "none";
+  $("#stand").textContent = data.generatedAt ? "Stand: " + data.generatedAt.slice(0,16).replace("T"," ") + " Uhr" : "";
+  renderDay(); renderGantt(); renderTasks();
+}
+
+/* ---- Navigation ---- */
+$$(".bottomnav button").forEach(b => b.onclick = () => {
+  $$(".bottomnav button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  $$(".tab").forEach(t => t.classList.remove("on"));
+  $("#tab-" + b.dataset.t).classList.add("on");
+  $("#datebar").style.display = b.dataset.t === "day" ? "flex" : "none";
+});
+$("#prevDay").onclick = () => shiftDay(-1);
+$("#nextDay").onclick = () => shiftDay(1);
+function shiftDay(n) {
+  const d = new Date(curDate + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  curDate = localISO(d);
+  renderDay();
+}
+
+/* ---- Tagesansicht ---- */
+const toMin = hm => parseInt(hm.slice(0,2),10)*60 + parseInt(hm.slice(3,5),10);
+
+function renderDay() {
+  $("#dateLabel").textContent = fmtD(curDate);
+  const plan = (data.plans || {})[curDate];
+  let blocks = plan && plan.blocks ? plan.blocks.slice() : [];
+  if (!blocks.length) {
+    blocks = (data.events || []).filter(e => e.date === curDate)
+      .map(e => ({start:e.start, end:e.end, type:"event", title:e.title}));
+  }
+  const sum = $("#daySummary");
+  if (plan && plan.summary) { sum.style.display = "block"; sum.textContent = plan.summary; }
+  else { sum.style.display = "none"; }
+
+  const dv = $("#dayview");
+  if (!blocks.length) {
+    dv.innerHTML = `<div class="empty">Kein Plan und keine Termine für diesen Tag.</div>`;
+    $("#unplannedBox").style.display = "none";
+    return;
+  }
+  blocks.sort((a,b) => a.start.localeCompare(b.start));
+  let h0 = Math.min(7, Math.floor(toMin(blocks[0].start)/60));
+  let h1 = Math.max(19, Math.ceil(toMin(blocks[blocks.length-1].end)/60));
+  const pxPerMin = 1;
+  let rows = "";
+  for (let h = h0; h < h1; h++) rows += `<div class="hourrow"><div class="hl">${String(h).padStart(2,"0")}:00</div></div>`;
+  let evs = "";
+  const taskById = id => (data.tasks || []).find(t => t.id === id);
+  for (const b of blocks) {
+    const top = (toMin(b.start) - h0*60) * pxPerMin;
+    const hgt = Math.max(24, (toMin(b.end) - toMin(b.start)) * pxPerMin - 3);
+    const t = b.taskId ? taskById(b.taskId) : null;
+    let k = "";
+    if (b.type === "event") k = "k-event";
+    else if (b.type === "break") k = "k-break";
+    else if (t && t.category === "private") k = "k-private";
+    if (t && t.status === "done") k += " k-done";
+    evs += `<div class="evblock ${k}" style="top:${top}px;height:${hgt}px">
+      <b>${esc(b.title)}</b><span class="tm">${b.start} – ${b.end}${b.note ? " · " + esc(b.note) : ""}</span>
+    </div>`;
+  }
+  const today = localISO(new Date());
+  if (curDate === today) {
+    const now = new Date();
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    if (nowMin > h0*60 && nowMin < h1*60) evs += `<div class="nowline" style="top:${(nowMin-h0*60)*pxPerMin}px"></div>`;
+  }
+  dv.innerHTML = rows + `<div class="evlayer">${evs}</div>`;
+  const ub = $("#unplannedBox");
+  if (plan && plan.unplanned && plan.unplanned.length) {
+    ub.style.display = "block";
+    ub.innerHTML = `<b>Nicht eingeplant:</b><ul>${plan.unplanned.map(u => `<li>${esc(u)}</li>`).join("")}</ul>`;
+  } else ub.style.display = "none";
+}
+
+/* ---- Gantt ---- */
+function taskRange(t) {
+  let end = t.deadline || t.startDate || "";
+  let start = t.startDate || "";
+  if (!start && end) {
+    const days = Math.max(1, Math.ceil((t.durationMin || 60) / 240));
+    const d = new Date(end + "T00:00:00"); d.setDate(d.getDate() - (days-1));
+    start = localISO(d);
+  }
+  if (start && !end) end = start;
+  return start ? {start, end} : null;
+}
+
+function renderGantt() {
+  const el = $("#gantt");
+  const rows = [];
+  for (const p of (data.projects || [])) {
+    const subs = (data.tasks || []).filter(t => t.projectId === p.id).map(t => ({t, r: taskRange(t)})).filter(x => x.r);
+    if (!subs.length) continue;
+    const s = subs.reduce((m,x) => x.r.start < m ? x.r.start : m, subs[0].r.start);
+    const e = subs.reduce((m,x) => x.r.end > m ? x.r.end : m, subs[0].r.end);
+    rows.push({label:p.name, proj:true, start:s, end:e});
+    subs.sort((a,b) => a.r.start.localeCompare(b.r.start));
+    for (const x of subs) rows.push({label:x.t.title, proj:false, start:x.r.start, end:x.r.end, st:x.t.status});
+  }
+  if (!rows.length) { el.innerHTML = `<div class="empty">Keine Projektaufgaben mit Datum.</div>`; return; }
+  let min = rows[0].start, max = rows[0].end;
+  for (const r of rows) { if (r.start < min) min = r.start; if (r.end > max) max = r.end; }
+  const today = localISO(new Date());
+  if (today < min) min = today;
+  if (today > max) max = today;
+  const d0 = new Date(min+"T00:00:00"), d1 = new Date(max+"T00:00:00");
+  d0.setDate(d0.getDate()-1); d1.setDate(d1.getDate()+2);
+  const total = Math.round((d1-d0)/86400000);
+  const pos = iso => (new Date(iso+"T00:00:00")-d0)/86400000/total*100;
+  const wid = r => Math.max(1.5,(Math.round((new Date(r.end+"T00:00:00")-new Date(r.start+"T00:00:00"))/86400000)+1)/total*100);
+  const step = total > 60 ? 14 : total > 25 ? 7 : total > 12 ? 3 : 1;
+  let axis = "";
+  for (let i = 0; i < total; i += step) {
+    const d = new Date(d0); d.setDate(d.getDate()+i);
+    axis += `<span style="width:${step/total*100}%">${d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"})}</span>`;
+  }
+  el.innerHTML = `<div class="g-axis">${axis}</div>` + rows.map(r => {
+    const late = !r.proj && r.st !== "done" && r.end < today;
+    const cls = r.proj ? "pbar" : r.st === "done" ? "done" : late ? "late" : "";
+    return `<div class="g-row">
+      <div class="g-label ${r.proj?"p":""}">${esc(r.label)}</div>
+      <div class="g-track"><div class="g-today" style="left:${pos(today)}%"></div>
+      <div class="g-bar ${cls}" style="left:${pos(r.start)}%;width:${wid(r)}%"></div></div>
+    </div>`;
+  }).join("");
+}
+
+/* ---- Aufgabenliste ---- */
+function renderTasks() {
+  const order = {q1:0,q2:1,q3:2,q4:3};
+  const list = (data.tasks || []).filter(t => t.status !== "done")
+    .sort((a,b) => (order[quad(a)]-order[quad(b)]) || (a.deadline||"9999").localeCompare(b.deadline||"9999"));
+  const el = $("#tlist");
+  if (!list.length) { el.innerHTML = `<div class="empty">Keine offenen Aufgaben. 🎉</div>`; return; }
+  const pn = id => { const p = (data.projects||[]).find(p => p.id === id); return p ? p.name : null; };
+  el.innerHTML = list.map(t => {
+    const q = quad(t);
+    let badges = `<span class="badge b-${q}">${q.toUpperCase()}</span>`;
+    badges += `<span class="badge ${t.category==="private"?"b-priv":"b-work"}">${t.category==="private"?"Privat":"Dienstlich"}</span>`;
+    if (t.blocksOthers) badges += `<span class="badge b-block">Andere warten</span>`;
+    if (t.status === "inprogress") badges += `<span class="badge">In Arbeit</span>`;
+    if (t.status === "waiting") badges += `<span class="badge">Warten</span>`;
+    for (const tag of (t.tags || [])) badges += `<span class="badge">${esc(tag)}</span>`;
+    const p = pn(t.projectId);
+    if (p) badges += `<span class="badge">${esc(p)}</span>`;
+    if (t.deadline) badges += `<span class="badge">bis ${new Date(t.deadline+"T00:00:00").toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"})}</span>`;
+    return `<div class="titem"><div class="tt">${esc(t.title)}</div><div class="meta">${badges}</div></div>`;
+  }).join("");
+}
+
+boot();
+</script>
+</body>
+</html>
